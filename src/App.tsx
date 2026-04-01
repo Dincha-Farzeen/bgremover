@@ -60,6 +60,7 @@ function App() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [activeFAQ, setActiveFAQ] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [useRealAI, setUseRealAI] = useState(true); // Default to real AI with PhotoRoom
 
   const originalImgRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -200,10 +201,14 @@ function App() {
   const removeBackground = () => {
     if (!originalImage) return;
     
-    const colorToUse = selectedColor || { r: 255, g: 255, b: 255 };
-    processBackgroundRemoval((url) => {
-      setProcessedImage(url);
-    }, colorToUse, tolerance);
+    if (useRealAI) {
+      removeBackgroundRealAI();
+    } else {
+      const colorToUse = selectedColor || { r: 255, g: 255, b: 255 };
+      processBackgroundRemoval((url) => {
+        setProcessedImage(url);
+      }, colorToUse, tolerance);
+    }
   };
 
   const autoRemove = () => {
@@ -212,6 +217,39 @@ function App() {
     processBackgroundRemoval((url) => {
       setProcessedImage(url);
     }, { r: 255, g: 255, b: 255 }, 40);
+  };
+
+  // Real AI Background Removal using PhotoRoom API
+  const removeBackgroundRealAI = async () => {
+    if (!originalImage) return;
+
+    setIsProcessing(true);
+
+    try {
+      const response = await fetch('/api/remove-bg', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: originalImage }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.image) {
+        setProcessedImage(data.image);
+      } else {
+        alert('Real AI removal failed: ' + (data.error || 'Unknown error. Try Demo mode.'));
+        // Fallback to canvas demo
+        removeBackground();
+      }
+    } catch (error) {
+      console.error('API error:', error);
+      alert('Real AI service unavailable. Using demo mode instead.');
+      removeBackground(); // Fallback to canvas
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const downloadImage = () => {
@@ -441,6 +479,24 @@ function App() {
               {/* Controls */}
               {originalImage && (
                 <div className="mt-6 bg-gray-50 rounded-3xl p-6 border border-gray-100">
+                  {/* Real AI Toggle */}
+                  <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <div className={`px-3 py-1 rounded-full text-xs font-semibold ${useRealAI ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-600'}`}>
+                        {useRealAI ? '🤖 REAL AI (PhotoRoom)' : '🎨 DEMO MODE (Canvas)'}
+                      </div>
+                      <button
+                        onClick={() => setUseRealAI(!useRealAI)}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Switch
+                      </button>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {useRealAI ? 'Powered by PhotoRoom AI' : 'Color-keying demo'}
+                    </div>
+                  </div>
+
                   <div className="flex justify-between items-center mb-5">
                     <div>
                       <div className="font-semibold">Background Color</div>
